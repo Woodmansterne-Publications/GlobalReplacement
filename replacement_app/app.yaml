@@ -1,0 +1,8 @@
+command:
+  - uvicorn
+  - main:app
+env:
+  - name: SQL_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: CARDDESIGNS_VOLUME_PATH
+    valueFrom: card-designs

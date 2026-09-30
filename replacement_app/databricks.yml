@@ -1,0 +1,48 @@
+bundle:
+  name: global-replacement
+
+variables:
+  sql_warehouse_id:
+    description: Existing SQL warehouse used by the app.
+
+resources:
+  apps:
+    global-replacement:
+      name: global-replacement
+      description: Planner workspace for reviewing and saving material replacements.
+      source_code_path: .
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.sql_warehouse_id}
+            permission: CAN_USE
+        - name: card-designs
+          uc_securable:
+            securable_type: VOLUME
+            securable_full_name: woodmansterne.landing.card_designs
+            permission: READ_VOLUME
+        - name: replacement-candidates
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: woodmansterne.gold.gold_material_replacement_candidates_snapshot
+            permission: SELECT
+        - name: replacement-racks
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: woodmansterne.gold.gold_material_replacement_rack_snapshot
+            permission: SELECT
+        - name: replacement-results
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: woodmansterne.gold.gold_material_replacement_results
+            permission: SELECT
+        - name: replacement-decisions-read
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: woodmansterne.gold.gold_material_replacement_decisions
+            permission: SELECT
+        - name: replacement-decisions-write
+          uc_securable:
+            securable_type: TABLE
+            securable_full_name: woodmansterne.gold.gold_material_replacement_decisions
+            permission: MODIFY
