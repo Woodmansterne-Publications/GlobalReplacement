@@ -13,6 +13,8 @@ Databricks app source for the global material replacement planner. The app reads
 
 Run `python verify_local.py` from this directory for an offline API contract check covering snapshot parsing, rack slots, choice validation/MERGE parameters, and artwork lookup/fallback.
 
+Run `node verify_rack_layout.js` for the offline rack neighbourhood and geometry check. The physical placement view shows up to three consecutive tiers and positions within one rack, shifts inward at edges, and provides a pocket selector for repeated targets. It uses one common millimetre scale, with 129 × 180 mm dimension fallbacks and approximate 10 mm gaps; full card faces are shown without shelf overlap. Domain terms are defined in the root `CONTEXT.md`.
+
 `app.yaml` starts one Uvicorn process on `0.0.0.0:${DATABRICKS_APP_PORT}`. The card design resource resolves to `/Volumes/woodmansterne/landing/card_designs`. The app looks up images by material code and should show a labeled fallback when no supported image file exists.
 
 ## Snapshot contracts

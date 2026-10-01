@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import sys
-import tempfile
+from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import main
+from databricks.sdk.errors.platform import NotFound
 
 
 TARGET = {
@@ -111,19 +113,20 @@ def main_check() -> None:
         "candidate_material": "517792",
     }
 
-    with tempfile.TemporaryDirectory() as directory:
-        volume = Path(directory)
-        image = volume / "507205.jpg"
-        image.write_bytes(b"test image")
-        main.CARDDESIGNS_VOLUME = volume
-        served = main.get_card_design("507205")
-        assert Path(served.path) == image
-        try:
-            main.get_card_design("999999")
-        except main.HTTPException as exc:
-            assert exc.status_code == 404
-        else:
-            raise AssertionError("Missing artwork did not return 404")
+    def download(volume_path: str) -> SimpleNamespace:
+        if volume_path == f"{main.CARDDESIGNS_VOLUME}/507205.jpg":
+            return SimpleNamespace(contents=BytesIO(b"test image"))
+        raise NotFound("Missing test artwork")
+
+    main._workspace_client = lambda: SimpleNamespace(files=SimpleNamespace(download=download))
+    served = main.get_card_design("507205")
+    assert served.body == b"test image" and served.media_type == "image/jpeg"
+    try:
+        main.get_card_design("999999")
+    except main.HTTPException as exc:
+        assert exc.status_code == 404
+    else:
+        raise AssertionError("Missing artwork did not return 404")
 
     print("Local API contract check passed.")
 

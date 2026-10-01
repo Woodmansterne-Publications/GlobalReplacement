@@ -1,4 +1,4 @@
-const { useEffect, useMemo, useState } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 
 const numberFormat = new Intl.NumberFormat("en-GB");
 const SCORE_LABELS = {
@@ -97,40 +97,59 @@ function ScoreBreakdown({ breakdown }) {
 }
 
 function RackExample({ example, targetMaterial }) {
-  if (!example?.slots?.length) return <p className="empty-state">No slots in this rack example.</p>;
-  const tiers = [...new Set(example.slots.map((slot) => String(slot.tier)))].sort((a, b) => Number(a) - Number(b));
+  const [selected_key, set_selected_key] = useState(null);
+  const [available_width, set_available_width] = useState(0);
+  const board_ref = useRef(null);
+  const layout = useMemo(() => rack_neighbourhood(example?.slots, targetMaterial, selected_key),
+    [example?.slots, targetMaterial, selected_key]);
+  useEffect(() => {
+    if (!board_ref.current) return;
+    const observer = new ResizeObserver(([entry]) => set_available_width(entry.contentRect.width));
+    observer.observe(board_ref.current);
+    return () => observer.disconnect();
+  }, [Boolean(layout)]);
+  if (!layout) return <p className="empty-state">No positioned target pockets in this rack example.</p>;
+  const scale = rack_scale(layout, available_width);
   return (
-    <div className="rack-board" aria-label={`${rackTitle(example)} rack positions`}>
-      {tiers.map((tier) => {
-        const slots = example.slots.filter((slot) => String(slot.tier) === tier).sort((a, b) => Number(a.position) - Number(b.position));
-        const positions = slots.map((slot) => Number(slot.position)).filter(Number.isFinite);
-        const firstPosition = positions.length ? Math.min(...positions) : 1;
-        const lastPosition = positions.length ? Math.max(...positions) : slots.length;
-        const columnCount = Math.max(1, lastPosition - firstPosition + 1);
-        return (
-          <div className="rack-tier" key={tier}>
-            <span className="tier-label">Tier {tier}</span>
-            <div className="rack-row" style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(54px, 1fr))` }}>
-              {slots.map((slot, index) => {
-                const isTarget = slot.is_target || String(slot.material) === String(targetMaterial);
-                const width = Number(slot.width_mm);
-                const height = Number(slot.height_mm);
-                const ratio = width > 0 && height > 0 ? `${width} / ${height}` : "129 / 180";
-                const position = Number(slot.position);
-                const gridColumnStart = Number.isFinite(position) ? position - firstPosition + 1 : index + 1;
-                return (
-                  <div className={`rack-slot ${isTarget ? "rack-slot-target" : ""}`} key={`${slot.tier}-${slot.position}-${index}`} style={{ gridColumnStart }}>
-                    <span className="slot-label">Pos {slot.position}</span>
-                    {slot.image_url ? <div className="slot-image-frame" style={{ aspectRatio: ratio }}><img src={slot.image_url} alt={`Material ${slot.material}, tier ${slot.tier}, position ${slot.position}`} /></div> : <span className="slot-art-missing">No image</span>}
-                    <span className="slot-material">{slot.material}</span>
-                    {isTarget && <span className="target-marker">Target</span>}
-                  </div>
-                );
-              })}
+    <>
+      {layout.targets.length > 1 && <label className="rack-pocket-selector">Target pocket
+        <select aria-label="Target pocket" value={pocket_key(layout.selected)} onChange={(event) => set_selected_key(event.target.value)}>
+          {layout.targets.map((slot) => <option key={pocket_key(slot)} value={pocket_key(slot)}>Tier {slot.tier}, position {slot.position}</option>)}
+        </select>
+      </label>}
+      <div ref={board_ref} className="rack-board" role="group" aria-label={`${rackTitle(example)} rack neighbourhood`}>
+        <div className="rack-neighbourhood" style={{ gap: RACK_GAP_MM * scale, visibility: available_width ? "visible" : "hidden" }}>
+          {layout.tiers.map((tier, row_index) => (
+            <div className="rack-row" key={tier} style={{ gridTemplateColumns: layout.column_widths.map((width) => `${width * scale}px`).join(" "), gap: RACK_GAP_MM * scale }}>
+              {layout.positions.map((position, column_index) => <RackPocket
+                key={`${tier}:${position}`} slot={layout.cells[row_index][column_index]} tier={tier} position={position}
+                height={layout.row_heights[row_index] * scale} scale={scale} selected_key={pocket_key(layout.selected)} />)}
             </div>
-          </div>
-        );
-      })}
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function RackPocket({ slot, tier, position, height, scale, selected_key }) {
+  const [failed, set_failed] = useState(false);
+  useEffect(() => set_failed(false), [slot?.image_url]);
+  const selected = slot && pocket_key(slot) === selected_key;
+  return (
+    <div className={`rack-slot ${slot?.is_target ? "rack-slot-target" : ""} ${selected ? "rack-slot-selected" : ""}`}>
+      <span className="slot-label" title={`Tier ${tier}, position ${position}`}>T{tier} · P{position}</span>
+      <div className="slot-space" style={{ height }}>
+        {slot ? <div className="slot-image-frame" style={{ width: slot.width_mm * scale, height: slot.height_mm * scale }}>
+          {slot.image_url && !failed ? <img src={slot.image_url} alt={`Material ${slot.material}, tier ${tier}, position ${position}`} onError={() => set_failed(true)} />
+            : <span className="slot-art-missing" role="img" aria-label={`Artwork unavailable for material ${slot.material}`}>Artwork unavailable</span>}
+        </div> : <span className="slot-art-missing">No pocket data</span>}
+      </div>
+      <div className="slot-details">
+        <span className="slot-material">{slot?.material || "—"}</span>
+        {slot?.is_target && <span className="target-marker">Target</span>}
+        {selected && <span className="selected-pocket-marker">Selected pocket</span>}
+      </div>
     </div>
   );
 }
@@ -292,8 +311,8 @@ function App() {
                   {loadingRack && <p className="muted small">Loading rack example…</p>}
                   {!loadingRack && rackError && <p className="error-banner" role="alert">Rack examples could not be loaded: {rackError}</p>}
                   {!loadingRack && !rackError && !rackPage.items.length && <p className="empty-state">No active rack examples for this material.</p>}
-                  {!loadingRack && rackPage.items[0] && <RackExample example={rackPage.items[0]} targetMaterial={activeTarget.material} />}
-                  <p className="rack-caption">Tier and position reflect the active display layout. Gold outline marks the target.</p>
+                  {!loadingRack && rackPage.items[0] && <RackExample key={`${activeTarget.material}:${rackPage.items[0].display_key}:${rackPage.items[0].rack_code}`} example={rackPage.items[0]} targetMaterial={activeTarget.material} />}
+                  <p className="rack-caption">Up to 3 × 3 nearby pockets within this rack. Higher tiers appear above lower tiers. Card sizes are approximate; gold outlines mark the target.</p>
                 </section>
               </>}
             </section>

@@ -19,10 +19,10 @@
 * { box-sizing: border-box; }
 html { min-width: 320px; min-height: 100%; background: var(--page); scroll-behavior: smooth; }
 body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--page); color: var(--ink); }
-button, input { font: inherit; color: inherit; }
+button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
-button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid var(--accent-bright); outline-offset: 3px; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid var(--accent-bright); outline-offset: 3px; }
 .app-shell { min-height: 100vh; background: radial-gradient(ellipse at 51% -22%, rgb(198 168 102 / 10%), transparent 44%), var(--page); }
 .site-frame { width: min(100%, 1640px); margin: 0 auto; padding: 24px 38px 30px; }
 .skip-link { position: fixed; z-index: 9; top: 10px; left: 10px; padding: 10px 14px; transform: translateY(-160%); border-radius: 8px; background: var(--accent); color: #171612; }
@@ -86,19 +86,23 @@ button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visibl
 .rack-nav button { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-soft); color: var(--accent-bright); font-size: 17px; }
 .rack-nav button:not(:disabled):hover { border-color: var(--accent); background: var(--accent-wash); }
 .rack-meta { display: flex; justify-content: space-between; gap: 8px; margin: 10px 0 6px; color: var(--muted); font-family: "DM Mono", ui-monospace, monospace; font-size: 8px; text-transform: uppercase; }
-.rack-board { max-height: 390px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; padding: 7px; background: #141617; scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
-.rack-tier { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 5px; padding: 5px 0; }
-.rack-tier + .rack-tier { border-top: 1px solid #2d2e2d; }
-.tier-label { color: var(--muted); font-family: "DM Mono", ui-monospace, monospace; font-size: 7px; text-transform: uppercase; }
-.rack-row { display: grid; min-width: max-content; align-items: end; gap: 4px; }
-.rack-slot { position: relative; display: flex; min-width: 0; flex-direction: column; align-items: center; overflow: hidden; border: 1px solid #393a38; border-radius: 5px; padding: 13px 3px 4px; background: #1c1e1e; }
-.slot-image-frame { display: grid; width: min(100%, 72px); max-height: 78px; place-items: center; overflow: hidden; }
-.slot-image-frame img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 2px; }
-.rack-slot-target { border: 2px solid var(--accent); box-shadow: 0 0 0 2px rgb(198 168 102 / 13%), inset 0 0 18px rgb(198 168 102 / 9%); }
-.slot-label { position: absolute; top: 3px; left: 4px; color: var(--muted); font-family: "DM Mono", ui-monospace, monospace; font-size: 6px; }
-.slot-material { max-width: 100%; overflow: hidden; margin-top: 4px; color: #d0cabc; font-family: "DM Mono", ui-monospace, monospace; font-size: 6px; text-overflow: ellipsis; white-space: nowrap; }
-.slot-art-missing { display: grid; width: 100%; min-height: 48px; place-items: center; color: #79766f; font-size: 7px; }
-.target-marker { position: absolute; right: 2px; bottom: 16px; border-radius: 3px; padding: 2px 3px; background: var(--accent); color: #171612; font-size: 6px; font-weight: 700; text-transform: uppercase; }
+.rack-pocket-selector { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--muted); font-size: 10px; }
+.rack-pocket-selector select { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 5px; padding: 5px; background: var(--surface-soft); }
+.rack-board { min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 7px; background: #141617; }
+.rack-neighbourhood { display: flex; flex-direction: column; align-items: center; }
+.rack-row { display: grid; }
+.rack-slot { min-width: 0; text-align: center; }
+.slot-label { display: block; height: 12px; overflow: hidden; color: var(--muted); font-family: "DM Mono", ui-monospace, monospace; font-size: 8px; line-height: 12px; white-space: nowrap; }
+.slot-space { display: flex; align-items: center; justify-content: center; }
+.slot-image-frame { display: flex; flex-shrink: 0; align-items: center; justify-content: center; background: #1c1e1e; }
+.slot-image-frame img { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; }
+.rack-slot-target .slot-image-frame { outline: 2px solid var(--accent); outline-offset: 0; }
+.rack-slot-selected .slot-image-frame { box-shadow: 0 0 0 4px rgb(198 168 102 / 24%); }
+.slot-details { display: flex; height: 32px; flex-direction: column; align-items: center; padding-top: 2px; }
+.slot-material { display: block; max-width: 100%; overflow: hidden; color: #d0cabc; font-family: "DM Mono", ui-monospace, monospace; font-size: 8px; line-height: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.slot-art-missing { color: var(--muted); font-size: 8px; line-height: 1.3; text-align: center; }
+.target-marker, .selected-pocket-marker { max-width: 100%; color: var(--accent-bright); font-size: 7px; line-height: 9px; white-space: nowrap; }
+.target-marker { font-weight: 700; text-transform: uppercase; }
 .rack-caption { margin: 7px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .candidate-heading-row { margin-bottom: 12px; }
 .saved-strip { display: flex; min-height: 48px; align-items: center; gap: 9px; margin-bottom: 10px; border: 1px solid #484236; border-radius: 9px; padding: 8px 10px; background: linear-gradient(100deg, rgb(198 168 102 / 9%), transparent 76%), var(--surface-soft); }
