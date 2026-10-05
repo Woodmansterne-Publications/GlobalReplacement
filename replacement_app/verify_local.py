@@ -19,6 +19,7 @@ TARGET = {
     "publisher": "Woodmansterne",
     "pocket_count": 2248,
     "unique_accounts": 976,
+    "accounts": "ZZZ010, ABB020, ABB020,  , XYZ030",
     "snapshot_at": "2026-09-29T10:00:00Z",
     "Chosencandidate": "517792",
     "candidates": [
@@ -90,6 +91,8 @@ def main_check() -> None:
     assert candidates.candidates[0].candidate_rank == 1
     assert candidates.candidates[0].score_breakdown.shared_tags == ["bold text", "typography"]
     assert candidates.Chosencandidate == "517792"
+    assert candidates.target.accounts == ["ABB020", "XYZ030", "ZZZ010"]
+    assert main._target({**TARGET, "accounts": None}).accounts == []
 
     rack_page = main.get_rack_examples("507205", cursor=None)
     rack = rack_page.items[0]

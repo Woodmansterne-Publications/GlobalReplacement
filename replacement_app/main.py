@@ -69,6 +69,7 @@ class ProductSummary(BaseModel):
 class TargetSummary(ProductSummary):
     snapshot_at: str
     Chosencandidate: str | None = None
+    accounts: list[str] = Field(default_factory=list)
 
 
 class ScoreBreakdown(BaseModel):
@@ -242,13 +243,14 @@ def _target(row: dict[str, Any]) -> TargetSummary:
         **_product(row),
         snapshot_at=str(row.get("snapshot_at") or ""),
         Chosencandidate=row.get("Chosencandidate"),
+        accounts=sorted({account.strip() for account in str(row.get("accounts") or "").split(",") if account.strip()}),
     )
 
 
 def _snapshot_row(material: str) -> dict[str, Any] | None:
     rows = sql.query(
         f"SELECT material, design, publisher, pocket_count, unique_accounts, "
-        f"snapshot_at, Chosencandidate, candidates FROM {RESULTS_VIEW} "
+        f"snapshot_at, Chosencandidate, accounts, candidates FROM {RESULTS_VIEW} "
         "WHERE material = :material LIMIT 1",
         {"material": material},
     )

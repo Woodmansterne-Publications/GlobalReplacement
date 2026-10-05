@@ -2,7 +2,7 @@ const STANDARD_CARD_WIDTH_MM = 129;
 const STANDARD_CARD_HEIGHT_MM = 180;
 const RACK_GAP_MM = 10;
 const RACK_MAX_HEIGHT_PX = 390;
-const RACK_LABEL_HEIGHT_PX = 44;
+const RACK_LABEL_HEIGHT_PX = 32;
 
 function positive_dimension(value, fallback) {
   const number = Number(value);
@@ -56,9 +56,9 @@ function rack_neighbourhood(slots, target_material, selected_key) {
   };
 }
 
-function rack_scale(layout, available_width) {
+function rack_scale(layout, available_width, available_height = RACK_MAX_HEIGHT_PX) {
   return Math.max(0, Math.min(
     available_width / layout.width_mm,
-    (RACK_MAX_HEIGHT_PX - 16 - layout.tiers.length * RACK_LABEL_HEIGHT_PX) / layout.height_mm
+    (available_height - 16 - layout.tiers.length * RACK_LABEL_HEIGHT_PX) / layout.height_mm
   ));
 }

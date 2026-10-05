@@ -6,6 +6,7 @@ const path = require("node:path");
 const context = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(__dirname, "static/rack_layout.js"), "utf8"), context);
 const { rack_neighbourhood, rack_scale, positioned_slots } = context;
+const label_height = vm.runInContext("RACK_LABEL_HEIGHT_PX", context);
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 function rack(rows, columns, target_tier, target_position) {
@@ -60,8 +61,10 @@ for (const value of [null, "", -1, NaN, Infinity, "invalid"]) {
 for (const width of [160, 280, 500]) {
   const scale = rack_scale(layout, width);
   assert(layout.width_mm * scale <= width + 1e-8);
-  assert(layout.height_mm * scale + layout.tiers.length * 44 + 16 <= 390 + 1e-8);
+  assert(layout.height_mm * scale + layout.tiers.length * label_height + 16 <= 390 + 1e-8);
 }
 assert.equal(rack_neighbourhood([], "target"), null);
+const compact_scale = rack_scale(layout, 300, 240);
+assert(layout.height_mm * compact_scale + layout.tiers.length * label_height + 16 <= 240 + 1e-8);
 assert.equal(rack_neighbourhood([{ tier: null, position: 1, material: "target" }], "target"), null);
 console.log("Rack layout checks passed");
