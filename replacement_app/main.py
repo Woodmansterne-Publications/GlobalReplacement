@@ -276,7 +276,7 @@ def get_targets(
         f"FROM {RESULTS_VIEW} WHERE (:search = '' OR LOWER(material) LIKE LOWER(:pattern) "
         "OR LOWER(COALESCE(design, '')) LIKE LOWER(:pattern) "
         "OR LOWER(COALESCE(publisher, '')) LIKE LOWER(:pattern)) "
-        "ORDER BY pocket_count DESC, material LIMIT :limit OFFSET :offset",
+        "ORDER BY pocket_count ASC NULLS LAST, material ASC LIMIT :limit OFFSET :offset",
         {
             "search": search.strip(),
             "pattern": f"%{search.strip()}%",

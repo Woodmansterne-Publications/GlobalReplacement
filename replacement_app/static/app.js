@@ -20,6 +20,7 @@ function score_factors(breakdown = {}) {
   ];
   return rows.map(([label, value, match]) => ({
     label,
+    tags: label === "Shared tags" && Array.isArray(breakdown.shared_tags) ? breakdown.shared_tags.join(", ") : "",
     text: finite_number(value) == null || match == null ? "Unavailable" : `×${formatCount(value)}`,
     tone: finite_number(value) == null || match == null ? "neutral" : match ? "positive" : "negative",
     comparison: match == null ? "Comparison unavailable" : match ? "Match" : "No match",
@@ -77,7 +78,7 @@ function ScoreBreakdown({ breakdown }) {
   return (
     <dl className="score-list">
       {score_factors(breakdown || {}).map((row) => <div key={row.label} className={`factor-${row.tone}`}>
-        <dt>{row.label}<span className="sr-only"> · {row.comparison}</span></dt><dd>{row.text}</dd>
+        <dt>{row.label}{row.tags && <span className="factor-positive"> [{row.tags}]</span>}<span className="sr-only"> · {row.comparison}</span></dt><dd>{row.text}</dd>
       </div>)}
     </dl>
   );

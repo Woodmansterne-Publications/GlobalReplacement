@@ -11,3 +11,7 @@ Planners review replacement materials in the context of their current physical p
 **Neighbourhood**: Up to three consecutive tiers and three consecutive positions around a selected target pocket. At rack boundaries it shifts inward; missing pocket coordinates remain gaps.
 
 **Target material**: The current material being reviewed for replacement. All its visible pocket occurrences are targets; the selected pocket identifies which occurrence frames the neighbourhood.
+
+**Shared tags**: Tags present on both the target material and a replacement candidate. Each distinct shared tag contributes to that candidate's tag score multiplier.
+
+**Pocket count**: The total number of physical pockets containing a material across the source displays, including repeated occurrences within one rack.

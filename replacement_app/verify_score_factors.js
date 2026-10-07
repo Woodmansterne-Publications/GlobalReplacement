@@ -18,6 +18,17 @@ assert.deepEqual(rows.map((row) => [row.label, row.text, row.tone]), [
 assert.equal(factors({ same_range: false, range_factor: 0 })[0].text, "×0");
 assert.equal(factors({ same_range: false, range_factor: 1 })[0].tone, "negative");
 assert.equal(factors({ shared_tags: [], tag_factor: 1 })[1].tone, "negative");
+assert.equal(factors({ shared_tags: [], tag_factor: 1 })[1].tags, "");
+assert.equal(factors({ tag_factor: 10 })[1].tags, "");
+const shared_tags = ["Flowers", "Birthday", "<b>bold text</b>"];
+const tag_row = factors({ shared_tags, tag_factor: 1000000 })[1];
+assert.equal(tag_row.tags, "Flowers, Birthday, <b>bold text</b>");
+assert.equal(tag_row.text, "×1,000,000");
+assert.equal(tag_row.tone, "positive");
+const unavailable_tags = factors({ shared_tags, tag_factor: null })[1];
+assert.equal(unavailable_tags.tags, tag_row.tags);
+assert.equal(unavailable_tags.text, "Unavailable");
+assert.equal(unavailable_tags.tone, "neutral");
 assert.equal(factors({ target_rrp_gbp: 3.15, candidate_rrp_gbp: 3.15, price_factor: 10 })[2].tone, "positive");
 for (const invalid of [null, undefined, "", " ", NaN, Infinity, "invalid", false]) {
   assert.equal(factors({ same_range: true, range_factor: invalid })[0].text, "Unavailable");

@@ -45,6 +45,7 @@ TARGET = {
 class FakeSql:
     def __init__(self) -> None:
         self.merge: tuple[str, dict[str, Any]] | None = None
+        self.target_query: tuple[str, dict[str, Any]] | None = None
 
     def query(self, statement: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         parameters = parameters or {}
@@ -52,6 +53,7 @@ class FakeSql:
             self.merge = (statement, parameters)
             return []
         if "SELECT material, design, publisher" in statement:
+            self.target_query = (statement, parameters)
             return [TARGET]
         if "SELECT * FROM" in statement:
             return [TARGET]
@@ -86,6 +88,21 @@ def main_check() -> None:
     targets = main.get_targets(search="507", cursor=None)
     assert targets.items[0].material == "507205"
     assert targets.items[0].Chosencandidate == "517792"
+    assert fake_sql.target_query
+    assert (
+        "ORDER BY pocket_count ASC NULLS LAST, material ASC LIMIT :limit OFFSET :offset"
+        in fake_sql.target_query[0]
+    )
+    assert fake_sql.target_query[1] == {
+        "search": "507",
+        "pattern": "%507%",
+        "limit": (str(main.PAGE_SIZE + 1), "INT"),
+        "offset": ("0", "INT"),
+    }
+    main.get_targets(search=" 507 ", cursor=str(main.PAGE_SIZE))
+    assert fake_sql.target_query[1]["search"] == "507"
+    assert fake_sql.target_query[1]["pattern"] == "%507%"
+    assert fake_sql.target_query[1]["offset"] == (str(main.PAGE_SIZE), "INT")
 
     candidates = main.get_candidates("507205")
     assert candidates.candidates[0].candidate_rank == 1
