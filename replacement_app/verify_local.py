@@ -36,6 +36,7 @@ TARGET = {
                 "same_range": True,
                 "range_factor": 100,
                 "shared_tags": ["bold text", "typography"],
+                "tag_factor": 1000000,
             },
         }
     ],
@@ -46,6 +47,7 @@ class FakeSql:
     def __init__(self) -> None:
         self.merge: tuple[str, dict[str, Any]] | None = None
         self.target_query: tuple[str, dict[str, Any]] | None = None
+        self.rack_query: tuple[str, dict[str, Any]] | None = None
 
     def query(self, statement: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         parameters = parameters or {}
@@ -58,22 +60,27 @@ class FakeSql:
         if "SELECT * FROM" in statement:
             return [TARGET]
         if "SELECT DISTINCT display_key" in statement:
-            return [{
-                "display_key": "STANDARD:ACCOUNT:DISPLAY:1",
+            self.rack_query = (statement, parameters)
+            examples = [{
+                "display_key": f"STANDARD:{account}:DISPLAY:1",
                 "display_type": "standard",
                 "display_ref": "DISPLAY",
-                "account": "ACCOUNT",
+                "account": account,
                 "revision": "1",
-                "rack_code": "RACK-A",
+                "rack_code": rack_code,
                 "snapshot_at": TARGET["snapshot_at"],
-            }]
+            } for account, rack_code in [
+                ("ABB020", "RACK-A"), ("ABB020", "RACK-B"), ("XYZ030", "RACK-C")
+            ]]
+            if parameters["account"] is not None:
+                examples = [row for row in examples if row["account"] == parameters["account"]]
+            offset = int(parameters["offset"][0])
+            return examples[offset:offset + 2]
         if "SELECT tier, position, material, width_mm, height_mm" in statement:
             return [
                 {"tier": 1, "position": 1, "material": "507205", "width_mm": 129, "height_mm": 180},
                 {"tier": 1, "position": 3, "material": "517792", "width_mm": 129, "height_mm": 180},
             ]
-        if "SELECT display_key, rack_code" in statement:
-            return []
         raise AssertionError(f"Unexpected SQL: {statement}")
 
 
@@ -107,6 +114,7 @@ def main_check() -> None:
     candidates = main.get_candidates("507205")
     assert candidates.candidates[0].candidate_rank == 1
     assert candidates.candidates[0].score_breakdown.shared_tags == ["bold text", "typography"]
+    assert not hasattr(candidates.candidates[0].score_breakdown, "tag_factor")
     assert candidates.Chosencandidate == "517792"
     assert candidates.target.accounts == ["ABB020", "XYZ030", "ZZZ010"]
     assert main._target({**TARGET, "accounts": None}).accounts == []
@@ -116,6 +124,31 @@ def main_check() -> None:
     assert rack.slots[0].is_target
     assert rack.slots[0].width_mm == 129
     assert [slot.position for slot in rack.slots] == [1, 3]
+    assert rack.account == "ABB020"
+    assert rack_page.previous_cursor is None and rack_page.next_cursor == "1"
+    assert fake_sql.rack_query
+    statement, parameters = fake_sql.rack_query
+    assert "AND (:account IS NULL OR account = :account)" in statement
+    assert "ORDER BY display_type, account, display_ref, display_key, rack_code LIMIT 2 OFFSET :offset" in statement
+    assert parameters == {"material": "507205", "account": None, "offset": ("0", "INT")}
+
+    account_page = main.get_rack_examples("507205", account="ABB020")
+    assert account_page.items[0].rack_code == "RACK-A"
+    assert account_page.previous_cursor is None and account_page.next_cursor == "1"
+    account_page = main.get_rack_examples("507205", cursor=account_page.next_cursor, account="ABB020")
+    assert account_page.items[0].rack_code == "RACK-B"
+    assert account_page.previous_cursor == "0" and account_page.next_cursor is None
+    assert fake_sql.rack_query[1]["account"] == "ABB020"
+    previous_page = main.get_rack_examples("507205", cursor=account_page.previous_cursor, account="ABB020")
+    assert previous_page.items[0].rack_code == "RACK-A"
+    assert main.get_rack_examples("507205", cursor="2").items[0].account == "XYZ030"
+    assert main.get_rack_examples("507205", account="XYZ030").next_cursor is None
+    for unavailable_account in ["ZZZ010", "abb020", "ABB020' OR 1=1 --"]:
+        empty_page = main.get_rack_examples("507205", account=unavailable_account)
+        assert empty_page.items == []
+        assert empty_page.previous_cursor is None and empty_page.next_cursor is None
+        assert fake_sql.rack_query[1]["account"] == unavailable_account
+        assert unavailable_account not in fake_sql.rack_query[0]
 
     try:
         main.save_choice("507205", main.ChoiceRequest(candidate_material="999999"))

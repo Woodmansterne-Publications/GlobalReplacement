@@ -59,6 +59,7 @@ CARDDESIGNS_VOLUME = CARDDESIGNS_VOLUME_SETTING.rstrip("/")
 
 class ProductSummary(BaseModel):
     material: str
+    material_status: str | None = None
     design: str | None = None
     publisher: str | None = None
     pocket_count: int | None = None
@@ -84,7 +85,6 @@ class ScoreBreakdown(BaseModel):
     candidate_rrp_gbp: float | None = None
     price_factor: float | None = None
     shared_tags: list[str] = Field(default_factory=list)
-    tag_factor: float | None = None
 
 
 class Candidate(ProductSummary):
@@ -154,7 +154,7 @@ class SqlGateway:
     def query(
         self,
         statement: str,
-        parameters: dict[str, str | tuple[str, str]] | None = None,
+        parameters: dict[str, str | tuple[str, str] | None] | None = None,
     ) -> list[dict[str, Any]]:
         if not self.warehouse_id:
             raise HTTPException(status_code=503, detail="SQL_WAREHOUSE_ID is not configured")
@@ -230,6 +230,7 @@ def _product(row: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     material = str(row.get(f"{prefix}material") or "")
     return {
         "material": material,
+        "material_status": row.get(f"{prefix}material_status"),
         "design": row.get(f"{prefix}design"),
         "publisher": row.get(f"{prefix}publisher"),
         "pocket_count": row.get(f"{prefix}pocket_count"),
@@ -249,7 +250,7 @@ def _target(row: dict[str, Any]) -> TargetSummary:
 
 def _snapshot_row(material: str) -> dict[str, Any] | None:
     rows = sql.query(
-        f"SELECT material, design, publisher, pocket_count, unique_accounts, "
+        f"SELECT material, material_status, design, publisher, pocket_count, unique_accounts, "
         f"snapshot_at, Chosencandidate, accounts, candidates FROM {RESULTS_VIEW} "
         "WHERE material = :material LIMIT 1",
         {"material": material},
@@ -272,7 +273,7 @@ def get_targets(
 ) -> TargetPage:
     offset = _offset(cursor)
     rows = sql.query(
-        f"SELECT material, design, publisher, pocket_count, unique_accounts, snapshot_at, Chosencandidate "
+        f"SELECT material, material_status, design, publisher, pocket_count, unique_accounts, snapshot_at, Chosencandidate "
         f"FROM {RESULTS_VIEW} WHERE (:search = '' OR LOWER(material) LIKE LOWER(:pattern) "
         "OR LOWER(COALESCE(design, '')) LIKE LOWER(:pattern) "
         "OR LOWER(COALESCE(publisher, '')) LIKE LOWER(:pattern)) "
@@ -305,6 +306,7 @@ def get_candidates(material: str) -> CandidateResponse:
         candidate_material = str(item.get("material") or "")
         product = {
             "material": candidate_material,
+            "material_status": item.get("material_status"),
             "design": item.get("design"),
             "publisher": item.get("publisher"),
             "pocket_count": item.get("pocket_count"),
@@ -324,15 +326,18 @@ def get_candidates(material: str) -> CandidateResponse:
 
 
 @app.get("/api/targets/{material}/rack-examples", response_model=RackExamplePage)
-def get_rack_examples(material: str, cursor: str | None = None) -> RackExamplePage:
+def get_rack_examples(
+    material: str, cursor: str | None = None, account: str | None = None
+) -> RackExamplePage:
     material = _material(material)
     offset = _offset(cursor)
     examples = sql.query(
         f"SELECT DISTINCT display_key, display_type, display_ref, account, revision, rack_code, "
         f"MAX(snapshot_at) AS snapshot_at FROM {RACKS_TABLE} WHERE material = :material "
+        "AND (:account IS NULL OR account = :account) "
         "GROUP BY display_key, display_type, display_ref, account, revision, rack_code "
-        "ORDER BY display_type, account, display_ref, display_key, rack_code LIMIT 1 OFFSET :offset",
-        {"material": material, "offset": (str(offset), "INT")},
+        "ORDER BY display_type, account, display_ref, display_key, rack_code LIMIT 2 OFFSET :offset",
+        {"material": material, "account": account, "offset": (str(offset), "INT")},
     )
     if not examples:
         return RackExamplePage(items=[])
@@ -367,16 +372,10 @@ def get_rack_examples(material: str, cursor: str | None = None) -> RackExamplePa
         ],
     )
     previous_cursor = str(offset - 1) if offset > 0 else None
-    next_rows = sql.query(
-        f"SELECT display_key, rack_code FROM {RACKS_TABLE} WHERE material = :material "
-        "GROUP BY display_key, rack_code "
-        "ORDER BY display_key, rack_code LIMIT 1 OFFSET :offset",
-        {"material": material, "offset": (str(offset + 1), "INT")},
-    )
     return RackExamplePage(
         items=[rack],
         previous_cursor=previous_cursor,
-        next_cursor=str(offset + 1) if next_rows else None,
+        next_cursor=str(offset + 1) if len(examples) > 1 else None,
         snapshot_at=str(example.get("snapshot_at") or "") or None,
     )
 

@@ -6,6 +6,12 @@ function formatCount(value) {
   return finite_number(value) == null ? "—" : NUMBER_FORMAT.format(Number(value));
 }
 
+function material_status_label(value) {
+  if (value == null) return "Unavailable";
+  const status = String(value);
+  return status.trim() ? status : "Blank";
+}
+
 function finite_number(value) {
   return value == null || typeof value === "boolean" || String(value).trim() === "" || !Number.isFinite(Number(value)) ? null : Number(value);
 }
@@ -15,12 +21,10 @@ function score_factors(breakdown = {}) {
   const candidate_price = finite_number(breakdown.candidate_rrp_gbp);
   const rows = [
     ["Range", breakdown.range_factor, typeof breakdown.same_range === "boolean" ? breakdown.same_range : null],
-    ["Shared tags", breakdown.tag_factor, Array.isArray(breakdown.shared_tags) ? breakdown.shared_tags.length > 0 : null],
     ["Price difference", breakdown.price_factor, target_price != null && candidate_price != null ? target_price === candidate_price : null],
   ];
   return rows.map(([label, value, match]) => ({
     label,
-    tags: label === "Shared tags" && Array.isArray(breakdown.shared_tags) ? breakdown.shared_tags.join(", ") : "",
     text: finite_number(value) == null || match == null ? "Unavailable" : `×${formatCount(value)}`,
     tone: finite_number(value) == null || match == null ? "neutral" : match ? "positive" : "negative",
     comparison: match == null ? "Comparison unavailable" : match ? "Match" : "No match",
@@ -68,6 +72,7 @@ function Artwork({ item, label = "Card artwork", className = "" }) {
 function Facts({ item }) {
   return (
     <dl className="facts">
+      <div><dt>Status</dt><dd>{material_status_label(item.material_status)}</dd></div>
       {item.design && item.design !== item.material && <div><dt>Design</dt><dd>{item.design}</dd></div>}
       <div><dt>Pockets</dt><dd>{formatCount(item.pocket_count)}</dd></div>
     </dl>
@@ -75,16 +80,20 @@ function Facts({ item }) {
 }
 
 function ScoreBreakdown({ breakdown }) {
+  const tags = Array.isArray(breakdown?.shared_tags) ? breakdown.shared_tags : [];
   return (
-    <dl className="score-list">
-      {score_factors(breakdown || {}).map((row) => <div key={row.label} className={`factor-${row.tone}`}>
-        <dt>{row.label}{row.tags && <span className="factor-positive"> [{row.tags}]</span>}<span className="sr-only"> · {row.comparison}</span></dt><dd>{row.text}</dd>
-      </div>)}
-    </dl>
+    <>
+      <dl className="score-list">
+        {score_factors(breakdown || {}).map((row) => <div key={row.label} className={`factor-${row.tone}`}>
+          <dt>{row.label}<span className="sr-only"> · {row.comparison}</span></dt><dd>{row.text}</dd>
+        </div>)}
+      </dl>
+      {tags.length > 0 && <p className="shared-tag-context"><span className="muted">Shared tags: </span>{tags.join(", ")}</p>}
+    </>
   );
 }
 
-function AccountShowcase({ item, loading, displayAccount }) {
+function AccountShowcase({ item, loading, displayAccount, onSelect }) {
   const [expanded, set_expanded] = useState(false);
   const [query, set_query] = useState("");
   const accounts = item.accounts || [];
@@ -94,7 +103,7 @@ function AccountShowcase({ item, loading, displayAccount }) {
       {accounts.length > 6 && <button type="button" className="text-button" aria-expanded={expanded} onClick={() => { set_expanded(!expanded); set_query(""); }}>{expanded ? "Show fewer" : "Show all"}</button>}</div>
     {expanded && <label className="search-field"><span className="sr-only">Filter accounts</span><input type="search" value={query} onChange={(event) => set_query(event.target.value)} placeholder="Find account" /></label>}
     {loading ? <p className="muted" role="status">Loading accounts…</p> : accounts.length ? <div className="account-list">
-      {visible.map((account) => <span className={`account-chip ${account === displayAccount ? "account-active" : ""}`} key={account}>{account}</span>)}
+      {visible.map((account) => <button type="button" className={`account-chip ${account === displayAccount ? "account-active" : ""}`} key={account} aria-pressed={account === displayAccount} onClick={() => onSelect(account)}>{account}</button>)}
       {!visible.length && <p className="muted">No accounts match this search.</p>}
     </div> : <p className="muted">Account details unavailable.</p>}
   </section>;
@@ -179,6 +188,7 @@ function App() {
   const [targetData, setTargetData] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [rackPage, setRackPage] = useState({ items: [], next_cursor: null, previous_cursor: null });
+  const [selected_account, set_selected_account] = useState(null);
   const [candidateSearch, setCandidateSearch] = useState("");
   const [stagedChoice, setStagedChoice] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -220,6 +230,7 @@ function App() {
 
   useEffect(() => {
     rack_request_ref.current += 1;
+    set_selected_account(null);
     setStagedChoice(null); setSavedChoice(null); setSaveError(""); set_save_message(""); set_artwork_item(null); setCandidateSearch("");
     if (!activeTarget?.material) {
       setTargetData(null); setCandidates([]); setRackPage({ items: [], next_cursor: null, previous_cursor: null });
@@ -240,23 +251,22 @@ function App() {
     }).catch((error) => {
       if (!cancelled) setDetailError(error.message);
     }).finally(() => { if (!cancelled) setLoadingTarget(false); });
-    request(`/api/targets/${material}/rack-examples`).then((rack) => {
-      if (!cancelled) setRackPage(rack);
-    }).catch((error) => {
-      if (!cancelled) setRackError(error.message);
-    }).finally(() => { if (!cancelled) setLoadingRack(false); });
+    loadRack(null, null, activeTarget.material);
     return () => { cancelled = true; rack_request_ref.current += 1; };
   }, [activeTarget?.material]);
 
-  async function loadRack(cursor) {
-    if (!activeTarget?.material) return;
-    const material = activeTarget.material;
+  async function loadRack(cursor, account = null, material = active_material_ref.current) {
+    if (!material) return;
     const request_id = ++rack_request_ref.current;
     const is_current = () => active_material_ref.current === material && rack_request_ref.current === request_id;
     setLoadingRack(true); setRackError("");
+    setRackPage({ items: [], next_cursor: null, previous_cursor: null });
     try {
-      const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-      const data = await request(`/api/targets/${encodeURIComponent(activeTarget.material)}/rack-examples${suffix}`);
+      const query = new URLSearchParams();
+      if (cursor != null) query.set("cursor", cursor);
+      if (account != null) query.set("account", account);
+      const suffix = query.size ? `?${query}` : "";
+      const data = await request(`/api/targets/${encodeURIComponent(material)}/rack-examples${suffix}`);
       if (is_current()) setRackPage(data);
     } catch (error) {
       if (is_current()) setRackError(error.message);
@@ -335,17 +345,17 @@ function App() {
               <div><Artwork item={current_item} label="Current card" /><button type="button" className="text-button" onClick={() => set_artwork_item(current_item)}>View artwork<span className="sr-only"> for current material {activeTarget.material}</span></button></div>
               <div className="current-card-copy"><h2 id="current-heading">Current material</h2><strong className="material-code">{activeTarget.material}</strong><Facts item={current_item} /></div>
             </article>
-            <AccountShowcase key={activeTarget.material} item={current_item} loading={loadingTarget} displayAccount={example?.account} />
+            <AccountShowcase key={activeTarget.material} item={current_item} loading={loadingTarget} displayAccount={selected_account ?? example?.account} onSelect={(account) => { set_selected_account(account); loadRack(null, account); }} />
             <section className="rack-wrap" aria-labelledby="rack-heading" aria-busy={loadingRack}>
               <div className="panel-heading"><h3 id="rack-heading">Display context</h3><div className="rack-nav">
-                <button type="button" onClick={() => loadRack(rackPage.previous_cursor)} disabled={!rackPage.previous_cursor || loadingRack} aria-label="Previous rack example">←</button>
-                <button type="button" onClick={() => loadRack(rackPage.next_cursor)} disabled={!rackPage.next_cursor || loadingRack} aria-label="Next rack example">→</button>
+                <button type="button" onClick={() => loadRack(rackPage.previous_cursor, selected_account)} disabled={!rackPage.previous_cursor || loadingRack} aria-label="Previous rack example">←</button>
+                <button type="button" onClick={() => loadRack(rackPage.next_cursor, selected_account)} disabled={!rackPage.next_cursor || loadingRack} aria-label="Next rack example">→</button>
               </div></div>
               {example && <div className="rack-meta"><strong>{rackTitle(example)}</strong><span>{rackDetails(example).join(" · ")}</span></div>}
               {loadingRack && <p role="status">Loading display context…</p>}
               {!loadingRack && rackError && <p className="error-banner" role="alert">Display context could not be loaded: {rackError}</p>}
-              {!loadingRack && !rackError && !example && <p className="empty-state">No active display examples for this material.</p>}
-              {!loadingRack && example && <RackExample key={`${activeTarget.material}:${example.display_key}:${example.rack_code}`} example={example} targetMaterial={activeTarget.material} />}
+              {!loadingRack && !rackError && !example && <p className="empty-state">{selected_account ? `No active display examples for this material in account ${selected_account}.` : "No active display examples for this material."}</p>}
+              {!loadingRack && example && <RackExample key={`${activeTarget.material}:${example.account}:${example.display_key}:${example.rack_code}`} example={example} targetMaterial={activeTarget.material} />}
               <p className="rack-caption">Nearby pockets in this rack. Gold marks the target; card sizes are approximate.</p>
             </section>
           </> : <><h2 id="current-heading">Current material</h2><p className="empty-state">Choose a material to review.</p></>}
@@ -374,6 +384,7 @@ function App() {
                       <span className="candidate-identity"><strong>{candidate.material}</strong>{(selected || chosen) && <span className="choice-marker">{selected ? "Unsaved" : "Saved"}</span>}</span>
                       {candidate.design && candidate.design !== candidate.material && <span className="candidate-design">Design {candidate.design}</span>}
                       <span className="candidate-pockets">{formatCount(candidate.pocket_count ?? candidate.score_breakdown?.base_pocket_count)} pockets</span>
+                      <span className="candidate-status">Status: {material_status_label(candidate.material_status)}</span>
                     </button>
                     <ScoreBreakdown breakdown={candidate.score_breakdown} />
                   </div>

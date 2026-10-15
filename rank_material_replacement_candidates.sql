@@ -259,8 +259,7 @@ shared_tags AS (
     SELECT
         p.target_material,
         p.candidate_material,
-        SORT_ARRAY(COLLECT_SET(candidate_tag.tag)) AS shared_tags,
-        COUNT(DISTINCT candidate_tag.tag) AS shared_tag_count
+        SORT_ARRAY(COLLECT_SET(candidate_tag.tag)) AS shared_tags
     FROM candidate_pairs p
     LEFT JOIN material_tags target_tag
         ON target_tag.material = p.target_material
@@ -281,27 +280,18 @@ scored_candidates AS (
         END AS range_factor,
         CASE
             WHEN p.target_rrp IS NOT NULL AND p.candidate_rrp IS NOT NULL
-                THEN 10.0 * LEAST(p.target_rrp, p.candidate_rrp)
+                THEN LEAST(p.target_rrp, p.candidate_rrp)
                     / GREATEST(p.target_rrp, p.candidate_rrp)
             ELSE CAST(1 AS DOUBLE)
         END AS price_factor,
         st.shared_tags,
-        COALESCE(st.shared_tag_count, 0) AS shared_tag_count,
-        CASE
-            WHEN COALESCE(st.shared_tag_count, 0) = 0 THEN CAST(1 AS DOUBLE)
-            ELSE 10.0 * COALESCE(st.shared_tag_count, 0)
-        END AS tag_factor,
         CAST(p.candidate_pocket_count AS DOUBLE)
             * CASE WHEN p.target_range = p.candidate_range THEN 100.0 ELSE 1.0 END
             * CASE
                 WHEN p.target_rrp IS NOT NULL AND p.candidate_rrp IS NOT NULL
-                    THEN 10.0 * LEAST(p.target_rrp, p.candidate_rrp)
+                    THEN LEAST(p.target_rrp, p.candidate_rrp)
                         / GREATEST(p.target_rrp, p.candidate_rrp)
                 ELSE 1.0
-              END
-            * CASE
-                WHEN COALESCE(st.shared_tag_count, 0) = 0 THEN 1.0
-                ELSE 10.0 * COALESCE(st.shared_tag_count, 0)
               END AS score
     FROM candidate_pairs p
     LEFT JOIN shared_tags st
@@ -338,8 +328,7 @@ candidate_arrays AS (
                             'target_rrp_gbp', r.target_rrp,
                             'candidate_rrp_gbp', r.candidate_rrp,
                             'price_factor', r.price_factor,
-                            'shared_tags', r.shared_tags,
-                            'tag_factor', r.tag_factor
+                            'shared_tags', r.shared_tags
                         )
                     )
                 ) END
